@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev -p 5006",
+    "dev": "next dev -p 5005",
     "lint": "eslint .",
     "start": "node .next/standalone/server.js",
     "worker": "tsx scripts/worker.ts"

@@ -20,6 +20,7 @@ export function getPool(): mysql.Pool | null {
   if (!pool) {
     pool = mysql.createPool({
       uri: DATABASE_URL,
+      charset: "utf8mb4",
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
