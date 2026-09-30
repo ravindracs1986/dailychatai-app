@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { API_CONFIG } from "@/lib/api-config"
 import { CONFIG, isLocalLlmActive } from "@/config"
-import { postLocalLlmChatCompletions } from "@/lib/local-llm"
+import { isActiveLocalModel, postLocalLlmChatCompletions } from "@/lib/local-llm"
 import dns from "dns"
 import { getCurrentUser } from "@/lib/get-current-user"
 import { isDatabaseConfigured, queryOne } from "@/lib/db"
@@ -10,7 +10,6 @@ import crypto from "crypto"
 import {
   getUserUsage,
   getOrCreateDailyUsage,
-  getAllowedModelForUser,
   getChatBurstPerMinuteForUser,
   isLocalLlmEnabledForUser,
   getSubscriptionAccessForUser,
@@ -188,7 +187,11 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Invalid request format" }, { status: 400 })
       }
 
-      const useLocal = isLocalLlmActive() && (await isLocalLlmEnabledForUser(user.id))
+      const localAllowed = isLocalLlmActive() && (await isLocalLlmEnabledForUser(user.id))
+      const requestedModel = typeof body.model === "string" ? body.model.trim() : ""
+      // Local LLM only for a model that exists in local_models. OpenRouter ids stay on OpenRouter.
+      const useLocal =
+        localAllowed && (requestedModel ? await isActiveLocalModel(requestedModel) : true)
       const upstreamBase = useLocal ? CONFIG.localLlm.baseUrl : API_CONFIG.OPENROUTER_BASE_URL
       if (CONFIG.generation.chatDebug) {
         console.log(
@@ -250,11 +253,14 @@ export async function POST(request: NextRequest) {
         }
         model = resolved
       } else {
-        const planModel = await getAllowedModelForUser(user.id)
-        model =
-          body.model && isModelAllowedForPlan(body.model, planModel)
-            ? body.model
-            : planModel || "openai/gpt-3.5-turbo"
+        const requested = typeof body.model === "string" ? body.model.trim() : ""
+        if (!requested) {
+          return NextResponse.json({ error: "Missing model" }, { status: 400 })
+        }
+        if (!(await isAllowedOpenRouterModel(requested))) {
+          return NextResponse.json({ error: "This model is not available" }, { status: 403 })
+        }
+        model = requested
       }
 
       const maxTokens =
@@ -436,15 +442,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Service unavailable" }, { status: 503 })
       }
       isAnonymous = true
-      
-      // Enforce model restrictions for anonymous users
-      if (!model || model.includes("gpt-4") || model.includes("opus") || model.includes("sonnet-3.5")) {
-        model = "openai/gpt-3.5-turbo"
-      }
     }
 
     if (!model) {
       return NextResponse.json({ error: "Missing model" }, { status: 400 })
+    }
+
+    if (!(await isAllowedOpenRouterModel(model))) {
+      return NextResponse.json({ error: "This model is not available" }, { status: 403 })
     }
 
     const response = await fetch(`${API_CONFIG.OPENROUTER_BASE_URL}/chat/completions`, {
@@ -490,18 +495,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function isModelAllowedForPlan(requestedModel: string, planModel: string | null): boolean {
-  if (!planModel) return true
-  const planLower = planModel.toLowerCase()
-  const reqLower = requestedModel.toLowerCase()
-  
-  // If plan allows GPT-4, allow all models
-  if (planLower.includes("gpt-4")) return true
-  
-  // If plan allows GPT-3.5 (Free), allow all models except known premium ones
-  if (planLower.includes("gpt-3.5")) {
-    return !reqLower.includes("gpt-4") && !reqLower.includes("opus") && !reqLower.includes("sonnet-3.5")
-  }
-  
-  return planLower === reqLower
+async function isAllowedOpenRouterModel(modelId: string): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    "SELECT id FROM models WHERE id = ? AND is_active = 1",
+    [modelId]
+  )
+  return !!row
 }

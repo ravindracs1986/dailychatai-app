@@ -12,9 +12,10 @@ export async function PATCH(
     const id = decodeURIComponent(params.id)
     
     if (typeof is_active !== "undefined") {
+      const allowed = is_active ? 1 : 0
       await execute(
-        "UPDATE models SET is_active = ? WHERE id = ?",
-        [is_active ? 1 : 0, id]
+        "UPDATE models SET is_active = ?, is_public = ? WHERE id = ?",
+        [allowed, allowed, id]
       )
     }
 

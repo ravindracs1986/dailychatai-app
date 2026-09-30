@@ -5,37 +5,18 @@ import { query } from "@/lib/db"
 import { getCurrentUser } from "@/lib/get-current-user"
 import { isLocalLlmActive } from "@/config"
 import { isLocalLlmEnabledForUser } from "@/lib/usage"
+import { listActiveLocalModels } from "@/lib/local-llm"
 
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser(request)
-    const useLocal = !!user && isLocalLlmActive() && (await isLocalLlmEnabledForUser(user.id))
-    if (useLocal) {
-      const rows = await query<any>("SELECT * FROM local_models WHERE is_active = 1 ORDER BY name ASC")
-      const freeModels = rows.map((m) => ({
-        id: m.id,
-        name: m.name,
-        provider: m.provider || "local",
-        context_length: Number(m.context_length || 0) || 8192,
-        pricing: { prompt: "0", completion: "0" },
-        architecture_modality: m.architecture_modality || "text",
-      }))
-      const categorizedModels = categorizeModels(freeModels)
-      return NextResponse.json({
-        models: freeModels,
-        categorizedModels,
-        customModels: [],
-        total: freeModels.length,
-      })
-    }
-    
-    const sql = user 
-      ? "SELECT * FROM models WHERE is_active = 1"
-      : "SELECT * FROM models WHERE is_public = 1 AND is_active = 1"
+    const includeLocal = !!user && isLocalLlmActive() && (await isLocalLlmEnabledForUser(user.id))
+
+    const sql = "SELECT * FROM models WHERE is_active = 1"
 
     const dbModels = await query<any>(sql)
 
-    const freeModels = dbModels.map((model) => ({
+    const openRouterModels = dbModels.map((model) => ({
       id: model.id,
       name: model.name.replace(/\s*\(free\)/i, "").trim(),
       provider: model.provider,
@@ -46,6 +27,9 @@ export async function GET(request: NextRequest) {
       },
       architecture_modality: model.architecture_modality,
     }))
+
+    const localModels = includeLocal ? await listActiveLocalModels() : []
+    const freeModels = [...localModels, ...openRouterModels]
 
     // Categorize models by performance tier
     const categorizedModels = categorizeModels(freeModels)

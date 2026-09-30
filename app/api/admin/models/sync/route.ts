@@ -36,8 +36,8 @@ export async function POST() {
           id, name, description, context_length, 
           pricing_prompt, pricing_completion, 
           architecture_modality, provider, 
-          is_free, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          is_free, is_active, is_public, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NOW())
         ON DUPLICATE KEY UPDATE
           name = VALUES(name),
           description = VALUES(description),

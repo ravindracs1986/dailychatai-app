@@ -1,4 +1,5 @@
 import { CONFIG } from "@/config"
+import { query, queryOne } from "@/lib/db"
 import http from "http"
 import https from "https"
 import dns from "dns"
@@ -11,6 +12,35 @@ export type LocalLlmModelRow = {
   context_length: number
   pricing: { prompt: string; completion: string }
   architecture_modality: string
+}
+
+/** Active rows from `local_models` for the chat picker. */
+export async function listActiveLocalModels(): Promise<LocalLlmModelRow[]> {
+  const rows = await query<{
+    id: string
+    name: string | null
+    provider: string | null
+    context_length: number | null
+    architecture_modality: string | null
+  }>("SELECT id, name, provider, context_length, architecture_modality FROM local_models WHERE is_active = 1 ORDER BY name ASC")
+
+  return rows.map((m) => ({
+    id: m.id,
+    name: m.name || m.id,
+    provider: m.provider || "local",
+    context_length: typeof m.context_length === "number" ? m.context_length : Number(m.context_length) || 8192,
+    pricing: { prompt: "0", completion: "0" },
+    architecture_modality: m.architecture_modality || "text",
+  }))
+}
+
+export async function isActiveLocalModel(modelId: string): Promise<boolean> {
+  if (!modelId) return false
+  const row = await queryOne<{ id: string }>(
+    "SELECT id FROM local_models WHERE id = ? AND is_active = 1",
+    [modelId]
+  )
+  return !!row
 }
 
 export async function fetchLocalLlmModelRows(): Promise<LocalLlmModelRow[]> {

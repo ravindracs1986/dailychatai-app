@@ -144,7 +144,7 @@ export default function AdminModelsPage() {
               <div>
                 <h1 className="text-3xl font-bold">Manage Models</h1>
                 <p className="text-muted-foreground mt-1">
-                  Browse and review {models.length} available models
+                  {models.length} OpenRouter models. They stay off until you allow one. An allowed model is available to signed-in and guest users.
                 </p>
               </div>
             </div>
@@ -243,24 +243,12 @@ export default function AdminModelsPage() {
 
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <span className={`text-xs font-semibold ${model.is_public ? "text-blue-500" : "text-muted-foreground"}`}>
-                                {model.is_public ? "PUBLIC" : "PRIVATE"}
-                            </span>
-                            <Switch 
-                                checked={model.is_public}
-                                onCheckedChange={(checked) => handleUpdateModel(model.id, { is_public: checked })}
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
                             <span className={`text-xs ${model.is_active ? "text-green-500" : "text-muted-foreground"}`}>
-                                {model.is_active ? "Active" : "Inactive"}
+                                {model.is_active ? "Allowed" : "Off"}
                             </span>
                             <Switch 
                                 checked={model.is_active}
-                                onCheckedChange={(checked) => handleUpdateModel(model.id, { is_active: checked })}
+                                onCheckedChange={(checked) => handleUpdateModel(model.id, { is_active: checked, is_public: checked })}
                             />
                         </div>
                     </div>
